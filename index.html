@@ -1,140 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lip Sync Face</title>
-    <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100vw;
-            height: 100vh;
-            background-color: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            cursor: pointer;
-            -webkit-user-select: none;
-            user-select: none;
-        }
-
-        canvas {
-            display: block;
-            width: 100vw;
-            height: 100vh;
-            object-fit: contain; /* Changed from cover to contain so the whole image shows */
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phoneme Lip Sync Face</title>
+<style>
+body {
+margin: 0;
+background-color: #2b2b2b;
+display: flex;
+align-items: center;
+justify-content: center;
+height: 100vh;
+font-family: sans-serif;
+overflow: hidden;
+cursor: pointer; /* Indicates screen is clickable */
+}
+canvas {
+background: transparent;
+max-width: 100vw;
+max-height: 100vh;
+}
+</style>
 </head>
 <body>
 
-    <canvas id="faceCanvas" width="1024" height="1024"></canvas>
+<canvas id="faceCanvas" width="800" height="800"></canvas>
 
-    <script>
-        const canvas = document.getElementById('faceCanvas');
-        const ctx = canvas.getContext('2d');
+<script>
+const canvas = document.getElementById('faceCanvas');
+const ctx = canvas.getContext('2d');
 
-        // Map mouth images to 3 phoneme types (O removed):
-        const mouthFiles = {
-            closed: 'mouth_closed.png', // Silence / M, B, P
-            wide_A: 'mouth_A_E.png',    // Wide open vowels (A, E)
-            teeth_S: 'mouth_S_F.png'    // Teeth together / Friction sounds (S, F, T, Z)
-        };
+// Map mouth images to sound types/phonemes:
+const mouthFiles = {
+closed: 'mouth_closed.png', // Silence / M, B, P
+wide_A: 'mouth_A_E.png', // Wide open vowels (A, E)
+round_O: 'mouth_O_U.png', // Rounded lips vowels (O, U)
+teeth_S: 'mouth_S_F.png' // Teeth together / Friction sounds (S, F, T, Z)
+};
 
-        const mouthImages = {};
-        let imagesLoaded = 0;
-        const totalImages = Object.keys(mouthFiles).length;
+const mouthImages = {};
+let imagesLoaded = 0;
+const totalImages = Object.keys(mouthFiles).length;
 
-        // Preload phoneme images
-        for (let key in mouthFiles) {
-            const img = new Image();
-            img.src = mouthFiles[key];
-            img.onload = () => {
-                imagesLoaded++;
-                if (imagesLoaded === totalImages) {
-                    drawFace('closed');
-                }
-            };
-            mouthImages[key] = img;
-        }
+// Preload all phoneme images
+for (let key in mouthFiles) {
+const img = new Image();
+img.src = mouthFiles[key];
+img.onload = () => {
+imagesLoaded++;
+if (imagesLoaded === totalImages) {
+drawFace('closed');
+}
+};
+mouthImages[key] = img;
+}
 
-        let audioContext, analyser, microphone, dataArray;
-        let isStarted = false;
+let audioContext, analyser, microphone, dataArray;
+let isStarted = false;
 
-        function drawFace(shapeKey) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const activeImage = mouthImages[shapeKey] || mouthImages['closed'];
-            if (activeImage) {
-                ctx.drawImage(activeImage, 0, 0, canvas.width, canvas.height);
-            }
-        }
+function drawFace(shapeKey) {
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+const activeImage = mouthImages[shapeKey] || mouthImages['closed'];
+if (activeImage) {
+ctx.drawImage(activeImage, 0, 0, canvas.width, canvas.height);
+}
+}
 
-        // Tap anywhere on the screen to initialize microphone
-        async function startListening() {
-            if (isStarted) return;
-            
-            try {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                
-                microphone = audioContext.createMediaStreamSource(stream);
-                analyser = audioContext.createAnalyser();
-                analyser.fftSize = 512;
-                
-                microphone.connect(analyser);
-                dataArray = new Uint8Array(analyser.frequencyBinCount);
+// Tap anywhere on the screen to initialize microphone
+async function startListening() {
+if (isStarted) return; // Prevent restarting multiple times
 
-                isStarted = true;
-                updateLoop();
-            } catch (err) {
-                alert('Microphone access denied or not supported on this device.');
-                console.error(err);
-            }
-        }
+try {
+audioContext = new (window.AudioContext || window.webkitAudioContext)();
+const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
 
-        // Listen for screen tap/click
-        window.addEventListener('click', startListening);
-        window.addEventListener('touchstart', startListening);
+microphone = audioContext.createMediaStreamSource(stream);
+analyser = audioContext.createAnalyser();
+analyser.fftSize = 512;
 
-        function updateLoop() {
-            requestAnimationFrame(updateLoop);
+microphone.connect(analyser);
+dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-            analyser.getByteFrequencyData(dataArray);
+isStarted = true;
+updateLoop();
+} catch (err) {
+alert('Microphone access denied or not supported on this device.');
+console.error(err);
+}
+}
 
-            let bass = 0, mid = 0, treble = 0;
-            const binCount = dataArray.length;
+// Listen for screen tap/click
+window.addEventListener('click', startListening);
+window.addEventListener('touchstart', startListening);
 
-            for (let i = 0; i < binCount; i++) {
-                if (i < binCount * 0.15) {
-                    bass += dataArray[i]; 
-                } else if (i < binCount * 0.5) {
-                    mid += dataArray[i];  
-                } else {
-                    treble += dataArray[i]; 
-                }
-            }
+function updateLoop() {
+requestAnimationFrame(updateLoop);
 
-            bass = bass / (binCount * 0.15);
-            mid = mid / (binCount * 0.35);
-            treble = treble / (binCount * 0.5);
+analyser.getByteFrequencyData(dataArray);
 
-            let totalVolume = (bass + mid + treble) / 3;
+// Separate frequency spectrum into 3 sound bands
+let bass = 0, mid = 0, treble = 0;
+const binCount = dataArray.length;
 
-            // Pick mouth shape based on dominant frequency (O-shape check removed)
-            let currentMouth = 'closed';
+for (let i = 0; i < binCount; i++) {
+if (i < binCount * 0.15) {
+bass += dataArray[i]; // Low pitch (O / U sounds)
+} else if (i < binCount * 0.5) {
+mid += dataArray[i]; // Mid pitch (A / E sounds)
+} else {
+treble += dataArray[i]; // High pitch (S / F / T / Z sounds)
+}
+}
 
-            if (totalVolume > 4) { 
-                if (treble > mid && treble > bass) {
-                    currentMouth = 'teeth_S'; // S, T, F, Z sounds
-                } else {
-                    currentMouth = 'wide_A';  // A, E, and general open sounds
-                }
-            }
+// Calculate averages
+bass = bass / (binCount * 0.15);
+mid = mid / (binCount * 0.35);
+treble = treble / (binCount * 0.5);
 
-            drawFace(currentMouth);
-        }
-    </script>
+let totalVolume = (bass + mid + treble) / 3;
+
+// Pick mouth shape based on dominant frequency
+let currentMouth = 'closed';
+
+if (totalVolume > 15) { // Silence threshold
+if (treble > mid && treble > bass && treble > 30) {
+currentMouth = 'teeth_S'; // S, T, F, Z sounds
+} else if (bass > mid * 1.2) {
+currentMouth = 'round_O'; // O, U sounds
+} else {
+currentMouth = 'wide_A'; // A, E sounds
+}
+}
+
+drawFace(currentMouth);
+}
+</script>
 </body>
 </html>
