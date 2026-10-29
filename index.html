@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Blinking Phoneme Lip Sync Face</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            cursor: pointer;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover; /* Fills the iPad screen edge-to-edge */
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="faceCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('faceCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            drawFace(currentShape);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Asset map (Teeth S and O removed, Blink added)
+        const mouthFiles = {
+            closed: 'mouth_closed.png',
+            wide_A: 'mouth_A_E.png',
+            blink: 'face_blink.png'
+        };
+
+        const mouthImages = {};
+        let currentShape = 'closed';
+
+        // Preload images safely
+        for (let key in mouthFiles) {
+            const img = new Image();
+            img.src = mouthFiles[key];
+            img.onload = () => {
+                drawFace(currentShape);
+            };
+            mouthImages[key] = img;
+        }
+
+        function drawFace(shapeKey) {
+            currentShape = shapeKey;
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const activeImage = mouthImages[shapeKey] || mouthImages['closed'];
+            
+            if (activeImage && activeImage.complete && activeImage.naturalWidth > 0) {
+                let hRatio = canvas.width / activeImage.width;
+                let vRatio = canvas.height / activeImage.height;
+                let ratio = Math.max(hRatio, vRatio);
+                let centerShiftX = (canvas.width - activeImage.width * ratio) / 2;
+                let centerShiftY = (canvas.height - activeImage.height * ratio) / 2;
+                
+                ctx.drawImage(activeImage, 0, 0, activeImage.width, activeImage.height, 
+                              centerShiftX, centerShiftY, activeImage.width * ratio, activeImage.height * ratio);
+            }
+        }
+
+        let audioContext, analyser, microphone, voiceFilter, dataArray;
+        let isStarted = false;
+
+        // Blinking variables
+        let isBlinking = false;
+        let lastBlinkTime = Date.now();
+        let nextBlinkInterval = 3000 + Math.random() * 3000; // Blink every 3 to 6 seconds
+        const blinkDuration = 150; // How long eyes stay shut (milliseconds)
+
+        async function startListening() {
+            if (isStarted) return;
+            
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                
+                microphone = audioContext.createMediaStreamSource(stream);
+                
+                voiceFilter = audioContext.createBiquadFilter();
+                voiceFilter.type = 'bandpass';
+                voiceFilter.frequency.value = 1000;
+                voiceFilter.Q.value = 1.0;
+                
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 512;
+                
+                microphone.connect(voiceFilter);
+                voiceFilter.connect(analyser);
+
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                isStarted = true;
+                updateLoop();
+            } catch (err) {
+                alert('Microphone access denied or not supported on this device.');
+                console.error(err);
+            }
+        }
+
+        window.addEventListener('click', startListening);
+        window.addEventListener('touchstart', startListening);
+
+        function updateLoop() {
+            requestAnimationFrame(updateLoop);
+
+            analyser.getByteFrequencyData(dataArray);
+
+            let bass = 0, mid = 0, treble = 0;
+            const binCount = dataArray.length;
+
+            for (let i = 0; i < binCount; i++) {
+                if (i < binCount * 0.15) {
+                    bass += dataArray[i]; 
+                } else if (i < binCount * 0.5) {
+                    mid += dataArray[i];  
+                } else {
+                    treble += dataArray[i]; 
+                }
+            }
+
+            bass = bass / (binCount * 0.15);
+            mid = mid / (binCount * 0.35);
+            treble = treble / (binCount * 0.5);
+
+            let totalVolume = (bass + mid + treble) / 3;
+            let now = Date.now();
+            let nextMouth = 'closed';
+
+            // Check if talking (threshold 20 ignores crowd noise)
+            if (totalVolume > 20) {
+                // FORCE CANCEL BLINK WHILE TALKING
+                isBlinking = false;
+                lastBlinkTime = now; // Reset timer so it doesn't blink immediately after talking stops
+                
+                nextMouth = 'wide_A'; // Talking -> use wide mouth
+            } else {
+                // NOT TALKING (Silence / Crowd background) -> Handle Blinking
+                if (isBlinking) {
+                    if (now - lastBlinkTime > blinkDuration) {
+                        isBlinking = false;
+                        lastBlinkTime = now;
+                        nextBlinkInterval = 3000 + Math.random() * 4000; // Randomize next blink
+                    }
+                } else {
+                    if (now - lastBlinkTime > nextBlinkInterval) {
+                        isBlinking = true;
+                        lastBlinkTime = now;
+                    }
+                }
+
+                // Set image based on blink state
+                nextMouth = isBlinking ? 'blink' : 'closed';
+            }
+
+            drawFace(nextMouth);
+        }
+    </script>
+</body>
+</html>
