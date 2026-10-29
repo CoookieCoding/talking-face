@@ -10,7 +10,6 @@
             padding: 0;
             width: 100vw;
             height: 100vh;
-            background-color: #000000;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -52,23 +51,3 @@
 
         const mouthImages = {};
         let currentShape = 'closed';
-
-        // Preload images safely without crashing if a file path is wrong
-        for (let key in mouthFiles) {
-            const img = new Image();
-            img.src = mouthFiles[key];
-            img.onload = () => { drawFace(currentShape); };
-            img.onerror = () => { console.warn("Could not load image: " + mouthFiles[key]); };
-            mouthImages[key] = img;
-        }
-
-        resizeCanvas();
-
-        function drawFace(shapeKey) {
-            currentShape = shapeKey;
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Fallback: If requested image isn't ready, try 'closed', or skip drawing frame
-            let activeImage = mouthImages[shapeKey];
-            if (!activeImage || !activeImage.
